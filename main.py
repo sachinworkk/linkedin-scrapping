@@ -10,7 +10,13 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 import os
+
+from urls import urls
+
+
 from dotenv import load_dotenv
+
+from mockData import mockEmployeeList
 
 
 load_dotenv()
@@ -25,11 +31,13 @@ def index():
 @app.route("/scrap",methods = ['POST'])
 def run_automation():
     if request.method == 'POST':
-        response = selenium_code()
+        # response = selenium_code()
+        response = get_formatted_employee_list(mockEmployeeList)
         return response
 
 def selenium_code():
     options = Options()
+    options.headless = False
     options.add_experimental_option("detach", True)
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=options)
@@ -69,7 +77,7 @@ def selenium_code():
     headers = {"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
             }
 
-    company_link = 'https://www.linkedin.com/voyager/api/search/dash/clusters?decorationId=com.linkedin.voyager.dash.deco.search.SearchClusterCollection-175&origin=FACETED_SEARCH&q=all&query=(flagshipSearchIntent:SEARCH_SRP,queryParameters:(currentCompany:List(10117050),resultType:List(PEOPLE),title:List(project%20manager)),includeFiltersInResponse:false)&start=5'
+    company_link = urls["EMPLOYEE_LIST"].format(companyId='10117050',searchQueryParams='project%20manager',pageNumber='5')
 
     with requests.session() as s:
         s.cookies['li_at'] = li_at.get('value')
@@ -80,6 +88,8 @@ def selenium_code():
         response_dict = response.json()
         return response_dict
 
+def get_formatted_employee_list(linkedInEmployeeResponse):
+    return linkedInEmployeeResponse["elements"][0]["results"][0]["primarySubtitle"]
 
 if __name__ == "__main__":
     app.run(debug=True)
