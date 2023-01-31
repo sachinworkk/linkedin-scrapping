@@ -1,22 +1,17 @@
+import os
 import requests
+from urls import urls
 from time import sleep
-from flask import Flask ,render_template, request
 from selenium import webdriver
+from dotenv import load_dotenv
+from nested_lookup import nested_lookup
 from selenium.webdriver.common.by import By
+from flask import Flask ,render_template, request
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service 
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
-import os
-
-from urls import urls
-
-
-from dotenv import load_dotenv
-
-from mockData import mockEmployeeList
 
 
 load_dotenv()
@@ -31,8 +26,7 @@ def index():
 @app.route("/scrap",methods = ['POST'])
 def run_automation():
     if request.method == 'POST':
-        # response = selenium_code()
-        response = get_formatted_employee_list(mockEmployeeList)
+        response = selenium_code()
         return response
 
 def selenium_code():
@@ -86,10 +80,28 @@ def selenium_code():
         s.headers["csrf-token"] = s.cookies["JSESSIONID"].strip('"')
         response = s.get(company_link)
         response_dict = response.json()
-        return response_dict
+        return get_formatted_employee_list(response_dict)
 
-def get_formatted_employee_list(linkedInEmployeeResponse):
-    return linkedInEmployeeResponse["elements"][0]["results"][0]["primarySubtitle"]
+
+def get_employee(employee):
+    imageURL = nested_lookup('fileIdentifyingUrlPathSegment',employee)
+    profession = nested_lookup('primarySubtitle',employee)
+    location = nested_lookup('secondarySubtitle',employee)
+    name = nested_lookup('title',employee)
+
+    detail = {'profession':profession[0]['text'],'location':location[0]['text'],'name':name[0]['text']}
+
+    if len(imageURL) == 0:
+        imageURL.append('')
+       
+    return {'detail': detail,'imageURL':imageURL[0]}
+
+def get_formatted_employee_list(linkedInEmployeeResponse):  
+    results = nested_lookup('results',linkedInEmployeeResponse)
+
+    return list(map(get_employee , results[0]))
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
