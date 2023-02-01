@@ -1,12 +1,17 @@
 import os
+import json
 import requests
+
 from urls import urls
+
+from flask_cors import CORS
+from flask import Flask,request
+
 from time import sleep
 from selenium import webdriver
 from dotenv import load_dotenv
 from nested_lookup import nested_lookup
 from selenium.webdriver.common.by import By
-from flask import Flask ,render_template, request
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service 
 from webdriver_manager.chrome import ChromeDriverManager
@@ -16,20 +21,19 @@ from selenium.webdriver.support import expected_conditions as EC
 
 load_dotenv()
 
-app = Flask(__name__,template_folder='template')
+app = Flask(__name__)
 
+CORS(app)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+@app.route('/login',methods=['POST'])
+def login():
+    request_data = request.get_json()
+    email = request_data['email']
+    password = request_data['password']
 
-@app.route("/scrap",methods = ['POST'])
-def run_automation():
-    if request.method == 'POST':
-        response = selenium_code()
-        return response
+    return selenium_login(email,password)
 
-def selenium_code():
+def selenium_login(email,password):
     options = Options()
     options.headless = False
     options.add_experimental_option("detach", True)
@@ -39,22 +43,22 @@ def selenium_code():
     driver.maximize_window()
     driver.get(os.environ.get("URL"))
 
-    email = driver.find_element(By.ID,"session_key")
-    password = driver.find_element(By.ID,"session_password")
+    email_element = driver.find_element(By.ID,"session_key")
+    password_element = driver.find_element(By.ID,"session_password")
 
     signIn = driver.find_element(By.CLASS_NAME,"sign-in-form__submit-button")
 
-    email.send_keys(os.environ.get("EMAIL"))
+    email_element.send_keys(email)
 
     sleep(4)
 
-    password.send_keys(os.environ.get("PASSWORD"))
+    password_element.send_keys(password)
 
     sleep(5)
     signIn.click()
 
     li_at = ''
-    jsessionId = ''
+    jsession_id = ''
 
     try:
         WebDriverWait(driver, 30).until(
@@ -62,20 +66,33 @@ def selenium_code():
         )
 
         li_at=driver.get_cookie('li_at')
-        jsessionId = driver.get_cookie("JSESSIONID")
-    except:
-        print("An exception occurred")
+        jsession_id = driver.get_cookie("JSESSIONID")
 
+        return {'liAt':li_at,'jSessionId':jsession_id}
+    except: # pylint: disable=bare-except
+        return {'message':'There was a problem while login in'}
 
+@app.route("/scrap",methods = ['POST'])
+def scrap():
+    if request.method == 'POST':
+        request_data = request.get_json()
+   
+        liAt = json.loads(request_data['liAt'])
+        jSessionId = json.loads(request_data['jSessionId'])
+        searchQueryParams = request_data['profession']
 
+        response = selenium_scrap(liAt,jSessionId,'466027',searchQueryParams)
+        return response
+
+def selenium_scrap(li_at,jsession_id,company_id='466027',search_query_params='project%20manager',page_number='1'):
     headers = {"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
             }
 
-    company_link = urls["EMPLOYEE_LIST"].format(companyId='10117050',searchQueryParams='project%20manager',pageNumber='5')
+    company_link = urls["EMPLOYEE_LIST"].format(companyId=company_id,searchQueryParams=search_query_params,pageNumber=page_number)
 
     with requests.session() as s:
         s.cookies['li_at'] = li_at.get('value')
-        s.cookies["JSESSIONID"] = jsessionId.get('value')
+        s.cookies["JSESSIONID"] = jsession_id.get('value')
         s.headers = headers
         s.headers["csrf-token"] = s.cookies["JSESSIONID"].strip('"')
         response = s.get(company_link)
