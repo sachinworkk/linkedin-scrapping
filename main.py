@@ -78,13 +78,15 @@ def scrap():
         request_data = request.get_json()
    
         liAt = json.loads(request_data['liAt'])
-        jSessionId = json.loads(request_data['jSessionId'])
+        companyId = request_data['organization']
         searchQueryParams = request_data['profession']
+        jSessionId = json.loads(request_data['jSessionId'])
+        pageNumber = request_data['pageNumber']
 
-        response = selenium_scrap(liAt,jSessionId,'466027',searchQueryParams)
+        response = selenium_scrap(liAt,jSessionId,companyId,searchQueryParams,pageNumber)
         return response
 
-def selenium_scrap(li_at,jsession_id,company_id='466027',search_query_params='project%20manager',page_number='1'):
+def selenium_scrap(li_at,jsession_id,company_id='466027',search_query_params='project%20manager',page_number='0'):
     headers = {"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
             }
 
@@ -105,18 +107,18 @@ def get_employee(employee):
     profession = nested_lookup('primarySubtitle',employee)
     location = nested_lookup('secondarySubtitle',employee)
     name = nested_lookup('title',employee)
-
-    detail = {'profession':profession[0]['text'],'location':location[0]['text'],'name':name[0]['text']}
+   
 
     if len(imageURL) == 0:
         imageURL.append('')
        
-    return {'detail': detail,'imageURL':imageURL[0]}
+    return {'profession':profession[0]['text'],'location':location[0]['text'],'name':name[0]['text'],'imageURL':imageURL[0]}
 
 def get_formatted_employee_list(linkedInEmployeeResponse):  
     results = nested_lookup('results',linkedInEmployeeResponse)
+    pagination = nested_lookup('paging',linkedInEmployeeResponse)
 
-    return list(map(get_employee , results[0]))
+    return {"employees":list(map(get_employee , results[0])),"pagination": pagination[0]}
 
 
 
