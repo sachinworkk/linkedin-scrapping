@@ -33,6 +33,13 @@ app = Flask(__name__)
 
 CORS(app)
 
+options = Options()
+options.headless = False
+options.add_experimental_option("detach", True)
+
+
+driver = None
+
 @app.route('/login',methods=['POST'])
 def login():
     """
@@ -50,12 +57,8 @@ def selenium_login(email,password):
     It opens a chrome browser, navigates to the LinkedIn login page, enters the email and password,
     clicks the sign in button, and returns the user logged in cookies
     """
-    options = Options()
-    options.headless = False
-    options.add_experimental_option("detach", True)
-
+    global driver
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=options)
-
     driver.maximize_window()
     driver.get(os.environ.get("URL"))
 
@@ -66,11 +69,11 @@ def selenium_login(email,password):
 
     email_element.send_keys(email)
 
-    sleep(4)
+    sleep(1)
 
     password_element.send_keys(password)
 
-    sleep(5)
+    sleep(2)
     sign_in.click()
 
     li_at = ''
@@ -88,10 +91,26 @@ def selenium_login(email,password):
     except: # pylint: disable=bare-except
         return {'message':'There was a problem while login in'}
 
+@app.route('/logout',methods=['DELETE'])
+def selenium_logout():
+    """
+    The function clicks on the profile button in the top right corner of the page
+    To Do: Automate clicking on logout button
+    """
+    try:
+        global driver
+
+        driver.quit()
+
+        return {'liAt':'','jSessionId':'','message':'User logged out successfully'}
+    except: # pylint: disable=bare-except
+        return {'message':'There was a problem while login in'}
+
+
 @app.route("/scrap",methods = ['POST'])
 def scrap():
     """
-    It requests linkedin for company's employee
+    It returns a list of employee data
     """
     if request.method == 'POST':
         request_data = request.get_json()
@@ -127,7 +146,7 @@ def selenium_scrap(li_at,jsession_id,company_id='466027'
 
 def get_employee(employee):
     """
-    It returns a list of employee from deep nested json
+    It returns a employee data from deep nested json
     """
     image_url = nested_lookup('fileIdentifyingUrlPathSegment',employee)
     profession = nested_lookup('primarySubtitle',employee)
@@ -141,8 +160,8 @@ def get_employee(employee):
 
 def get_formatted_employee_list(linked_in_employee_response):
     """
-    It takes the response from the LinkedIn API and returns a list of employees with their names,
-    titles, and LinkedIn profile URLs
+    It takes the response from the LinkedIn API and returns a list of employees with required
+    information
     """
     results = nested_lookup('results',linked_in_employee_response)
     pagination = nested_lookup('paging',linked_in_employee_response)
