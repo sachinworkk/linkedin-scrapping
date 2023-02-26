@@ -7,6 +7,8 @@ import re
 
 from time import sleep
 
+import urllib.parse
+
 import requests
 
 from flask_cors import CORS
@@ -14,15 +16,14 @@ from flask import Flask, request
 
 from dotenv import load_dotenv
 
-import urllib.parse
-
 from nested_lookup import nested_lookup
+
+from webdriver_manager.chrome import ChromeDriverManager
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -38,7 +39,7 @@ app = Flask(__name__)
 CORS(app)
 
 options = Options()
-options.headless = False
+options.headless = True
 options.add_experimental_option("detach", True)
 
 
@@ -125,10 +126,10 @@ def scrap():
     """
     if request.method == 'POST':
         request_data = request.get_json()
-        li_at = json.loads(request_data['liAt'])
+        li_at = json.loads(request.headers['liAt'])
         company_id = request_data['organization']
         search_query_params = request_data['profession']
-        jsession_id = json.loads(request_data['jSessionId'])
+        jsession_id = json.loads(request.headers['jSessionId'])
         page_number = request_data['pageNumber']
 
         response = selenium_scrap(
@@ -148,28 +149,27 @@ def scrapUserInfo(employee_id):
     """
     if request.method == 'POST':
         global driver
-        request_data = request.get_json()
 
-        li_at = json.loads(request_data['liAt'])
-        jsession_id = json.loads(request_data['jSessionId'])
+        li_at = json.loads(request.headers['liAt'])
+        jsession_id = json.loads(request.headers['jSessionId'])
 
-        driver.get(request_data['navigationURL'])
+        # To Do: Scrap experience in the future.
+        # driver.get(request_data['navigationURL'])
 
-        # try:
-        WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located(
-                (By.ID, "experience"))
-        )
+        # # try:
+        # WebDriverWait(driver, 30).until(
+        #     EC.presence_of_element_located(
+        #         (By.ID, "experience"))
+        # )
 
-        experience_element = driver.find_element(By.ID, "experience")
-
-        print(experience_element)
+        # experience_element = driver.find_element(By.ID, "experience")
 
         # except:  # pylint: disable=bare-except
         #     return {'message': 'There was a problem scrapping project'}
 
-        headers = {"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
-                   }
+        headers = {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
+        }
 
         employee_link = urls["EMPLOYEE_DETAIL"].format(employeeId=employee_id)
         with requests.session() as s:
@@ -184,17 +184,21 @@ def scrapUserInfo(employee_id):
 
 @app.route("/companies", methods=['POST'])
 def get_company_list():
+    """
+    It takes a company name as input, and returns a list of companies that match the input
+    :return: A list of dictionaries.
+    """
 
     if request.method == 'POST':
         global driver
         request_data = request.get_json()
 
-        li_at = json.loads(request_data['liAt'])
-        jsession_id = json.loads(request_data['jSessionId'])
+        li_at = json.loads(request.headers['liAt'])
+        jsession_id = json.loads(request.headers['jSessionId'])
         company_query_param = request_data['companySearchQueryParam']
 
-        headers = {"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
-                   }
+        headers = {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36", }
 
         company_link = urls["LAZY_LOAD_COMPANY_LIST"].format(
             companyQuery=company_query_param)
@@ -220,8 +224,8 @@ def selenium_scrap(li_at, jsession_id, company_id='466027',
     """
     It requests linkedin for company's employee
     """
-    headers = {"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
-               }
+    headers = {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36", }
 
     company_link = urls["EMPLOYEE_LIST"].format(
         companyId=company_id, searchQueryParams=search_query_params, pageNumber=page_number)
@@ -269,6 +273,13 @@ def get_employee(employee):
 
 
 def extract_company_id(company_urn):
+    """
+    It takes a string, and if it matches a certain pattern, it returns the part of the string that
+    matched the pattern
+
+    :param company_urn: The URN of the company you want to get the data for
+    :return: The company ID
+    """
     if company_urn is None:
         return None
 
@@ -282,6 +293,12 @@ def extract_company_id(company_urn):
 
 
 def get_company_info(linked_in_company_response):
+    """
+    It takes the response from the LinkedIn API and extracts the company name and ID
+
+    :param linked_in_company_response: This is the response from the LinkedIn API
+    :return: A dictionary with the text and trackingUrn of the company.
+    """
     text = nested_lookup('text', linked_in_company_response)
     trackingUrn = array.get_item(nested_lookup(
         'trackingUrn', linked_in_company_response), 0, '')
@@ -332,8 +349,8 @@ def send_invite():
 
         invitation_link = urls["INVITATION_LINK"]
 
-        li_at = json.loads(request_data['liAt'])
-        jsession_id = json.loads(request_data['jSessionId'])
+        li_at = json.loads(request.headers['liAt'])
+        jsession_id = json.loads(request.headers['jSessionId'])
         invitee_profile_urn = request_data['inviteeProfileUrn']
 
         with requests.session() as s:
@@ -355,17 +372,29 @@ def lazy_load_employee_status():
     """
     if request.method == 'POST':
         request_data = request.get_json()
-        li_at = json.loads(request_data['liAt'])
-        jsession_id = json.loads(request_data['jSessionId'])
-        lazyLoadedActionsUrns = request_data['lazyLoadedActionsUrns']
+        li_at = json.loads(request.headers['liAt'])
+        jsession_id = json.loads(request.headers['jSessionId'])
+        lazy_loaded_actions_urns = request_data['lazyLoadedActionsUrns']
 
-        response = getLazyLoadEmployeeStatus(
-            li_at, jsession_id, lazyLoadedActionsUrns)
+        response = get_lazy_load_employee_status(
+            li_at, jsession_id, lazy_loaded_actions_urns)
         return response
 
 
-def getLazyLoadEmployeeStatus(li_at, jsession_id, lazy_loaded_actions_urns):
-    # URL-encoded string with special characters escaped
+def get_lazy_load_employee_status(li_at, jsession_id,
+                                  lazy_loaded_actions_urns):
+    """
+    It takes a list of URNs, and returns a dictionary
+    of URNs and their corresponding employee status
+
+    :param li_at: This is the cookie that is used to authenticate the user
+    :param jsession_id: This is the cookie that
+    is set when you log in to LinkedIn
+    :param lazy_loaded_actions_urns: This is a
+    list of URNs that you want to get the employee status for
+    :return: A dictionary with the key "membersStatus"
+    and the value is a list of dictionaries.
+    """
     url_encoded = ','.join(urllib.parse.quote(element, safe='')
                            for element in lazy_loaded_actions_urns)
 
@@ -373,8 +402,9 @@ def getLazyLoadEmployeeStatus(li_at, jsession_id, lazy_loaded_actions_urns):
         lazyLoadingUserIds=url_encoded
     )
 
-    headers = {"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
-               }
+    headers = {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
+    }
 
     with requests.session() as s:
         s.cookies['li_at'] = li_at.get('value')
